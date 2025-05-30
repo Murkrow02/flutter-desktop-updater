@@ -29,7 +29,7 @@ class DesktopUpdaterController extends ChangeNotifier {
   bool _isMandatory = false;
   bool get isMandatory => _isMandatory;
 
-  String? _folderUrl;
+  String? _zipUrl;
 
   UpdateProgress? _updateProgress;
   UpdateProgress? get updateProgress => _updateProgress;
@@ -84,7 +84,7 @@ class DesktopUpdaterController extends ChangeNotifier {
       print("Found folder url: ${versionResponse?.url}");
 
       _needUpdate = true;
-      _folderUrl = versionResponse?.url;
+      _zipUrl = versionResponse?.url;
       _isMandatory = versionResponse?.mandatory ?? false;
 
       // Calculate total length in KB
@@ -108,37 +108,24 @@ class DesktopUpdaterController extends ChangeNotifier {
   }
 
   Future<void> downloadUpdate() async {
-    if (_folderUrl == null) {
-      throw Exception("Folder URL is not set");
-    }
-
-    if (_changedFiles == null && _changedFiles!.isEmpty) {
-      throw Exception("Changed files are not set");
+    if (_zipUrl == null) {
+      throw Exception("ZIP URL is not set");
     }
 
     final stream = await _plugin.updateApp(
-      remoteUpdateFolder: _folderUrl!,
-      changedFiles: _changedFiles ?? [],
+      remoteZipUrl: _zipUrl!,
     );
 
     stream.listen(
-      (event) {
+          (event) {
         _updateProgress = event;
-
-        // if (_downloadProgress >= 1.0) {
-        //   _isDownloading = false;
-        //   _downloadProgress = 1.0;
-        //   _downloadedSize = _downloadSize;
-        //   _isDownloaded = true;
-
-        //   notifyListeners();
-        //   return;
-        // }
 
         _isDownloading = true;
         _isDownloaded = false;
+        _downloadSize = event.totalBytes;
         _downloadProgress = event.receivedBytes / event.totalBytes;
-        _downloadedSize = _downloadSize * _downloadProgress;
+        _downloadedSize = event.receivedBytes;
+
         notifyListeners();
       },
       onDone: () {
@@ -149,8 +136,17 @@ class DesktopUpdaterController extends ChangeNotifier {
 
         notifyListeners();
       },
+      onError: (error) {
+        _isDownloading = false;
+        _isDownloaded = false;
+        print("Download error: $error");
+
+        notifyListeners();
+      },
+      cancelOnError: true,
     );
   }
+
 
   void restartApp() {
     _plugin.restartApp();

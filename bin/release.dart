@@ -17,6 +17,9 @@ Future<void> main(List<String> args) async {
     exit(1);
   }
 
+  // Check for custom entry point
+  final entryPoint = args.length > 1 ? args[1] : "lib/main.dart";
+
   final pubspec = File("pubspec.yaml").readAsStringSync();
   final parsed = Pubspec.parse(pubspec);
 
@@ -26,7 +29,7 @@ Future<void> main(List<String> args) async {
   final buildNumber = parsed.version?.build.firstOrNull.toString();
 
   print(
-    "Building version $buildName+$buildNumber for $platform for app ${parsed.name}",
+    "Building version $buildName+$buildNumber for $platform for app ${parsed.name} with entry point $entryPoint",
   );
 
   final appNamePubspec = parsed.name;
@@ -59,11 +62,14 @@ Future<void> main(List<String> args) async {
     flutterBinPath,
     "build",
     platform,
+    "--target",
+    entryPoint,
     "--dart-define",
     "FLUTTER_BUILD_NAME=$buildName",
     "--dart-define",
     "FLUTTER_BUILD_NUMBER=$buildNumber",
   ];
+
 
   print("Executing build command: ${buildCommand.join(' ')}");
 

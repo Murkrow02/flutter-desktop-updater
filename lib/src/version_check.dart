@@ -116,51 +116,51 @@ Future<ItemModel?> versionCheckFunction({
 
       final client = http.Client();
 
-      print("Downloading hashes file");
-
-      final newHashFileUrl = "${latestVersion.url}/hashes.json";
-      final newHashFileRequest = http.Request("GET", Uri.parse(newHashFileUrl));
-      final newHashFileResponse = await client.send(newHashFileRequest);
-
-      if (newHashFileResponse.statusCode != 200) {
-        client.close();
-        throw const HttpException("Failed to download hashes.json");
-      }
-
-      final outputFile =
-          File("${tempDir.path}${Platform.pathSeparator}hashes.json");
-      final sink = outputFile.openWrite();
-
-      await newHashFileResponse.stream.listen(
-        sink.add,
-        onDone: () async {
-          await sink.close();
-          client.close();
-        },
-        onError: (e) async {
-          await sink.close();
-          client.close();
-          throw e;
-        },
-        cancelOnError: true,
-      ).asFuture();
-
-      final oldHashFilePath = await genFileHashes();
-      final newHashFilePath = outputFile.path;
-
-      print("Old hashes file: $oldHashFilePath");
-
-      final changedFiles = await verifyFileHashes(
-        oldHashFilePath,
-        newHashFilePath,
-      );
-
-      if (changedFiles.isEmpty) {
-        print("No updates required.");
-      }
+      // print("Downloading hashes file");
+      //
+      // final newHashFileUrl = "${latestVersion.url}/hashes.json";
+      // final newHashFileRequest = http.Request("GET", Uri.parse(newHashFileUrl));
+      // final newHashFileResponse = await client.send(newHashFileRequest);
+      //
+      // if (newHashFileResponse.statusCode != 200) {
+      //   client.close();
+      //   throw const HttpException("Failed to download hashes.json");
+      // }
+      //
+      // final outputFile =
+      //     File("${tempDir.path}${Platform.pathSeparator}hashes.json");
+      // final sink = outputFile.openWrite();
+      //
+      // await newHashFileResponse.stream.listen(
+      //   sink.add,
+      //   onDone: () async {
+      //     await sink.close();
+      //     client.close();
+      //   },
+      //   onError: (e) async {
+      //     await sink.close();
+      //     client.close();
+      //     throw e;
+      //   },
+      //   cancelOnError: true,
+      // ).asFuture();
+      //
+      // final oldHashFilePath = await genFileHashes();
+      // final newHashFilePath = outputFile.path;
+      //
+      // print("Old hashes file: $oldHashFilePath");
+      //
+      // final changedFiles = await verifyFileHashes(
+      //   oldHashFilePath,
+      //   newHashFilePath,
+      // );
+      //
+      // if (changedFiles.isEmpty) {
+      //   print("No updates required.");
+      // }
 
       return latestVersion.copyWith(
-        changedFiles: changedFiles,
+        changedFiles: [],
         appName: appArchiveDecoded.appName,
       );
     } else {

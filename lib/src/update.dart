@@ -1,103 +1,91 @@
 import "dart:async";
 import "dart:io";
-
+import "package:archive/archive_io.dart";
 import "package:desktop_updater/desktop_updater.dart";
-import "package:desktop_updater/src/download.dart";
 
-/// Modified updateAppFunction to return a stream of UpdateProgress.
-/// The stream emits total kilobytes, received kilobytes, and the currently downloading file's name.
 Future<Stream<UpdateProgress>> updateAppFunction({
-  required String remoteUpdateFolder,
-  required List<FileHashModel?> changes,
+  required String remoteZipUrl,
 }) async {
   final executablePath = Platform.resolvedExecutable;
-
-  final directoryPath = executablePath.substring(
-    0,
-    executablePath.lastIndexOf(Platform.pathSeparator),
+  var appDirectory = Directory(
+    executablePath.substring(0, executablePath.lastIndexOf(Platform.pathSeparator)),
   );
-
-  var dir = Directory(directoryPath);
-
-  if (Platform.isMacOS) {
-    dir = dir.parent;
-  }
 
   final responseStream = StreamController<UpdateProgress>();
 
+  if (Platform.isMacOS) {
+    appDirectory = appDirectory.parent;
+  }
+
   try {
-    if (await dir.exists()) {
-      if (changes.isEmpty) {
-        print("No updates required.");
-        await responseStream.close();
-        return responseStream.stream;
-      }
+    final tempDir = await Directory.systemTemp.createTemp("app_update_");
+    final zipFile = File("${tempDir.path}/update.zip");
 
-      var receivedBytes = 0.0;
-      final totalFiles = changes.length;
-      var completedFiles = 0;
+    // Download the zip
+    final request = await HttpClient().getUrl(Uri.parse(remoteZipUrl));
+    final response = await request.close();
 
-      // Calculate total length in KB
-      final totalLengthKB = changes.fold<double>(
-        0,
-        (previousValue, element) =>
-            previousValue + ((element?.length ?? 0) / 1024.0),
-      );
-
-      final changesFutureList = <Future<dynamic>>[];
-
-      for (final file in changes) {
-        if (file != null) {
-          changesFutureList.add(
-            downloadFile(
-              remoteUpdateFolder,
-              file.filePath,
-              dir.path,
-              (received, total) {
-                receivedBytes += received;
-                responseStream.add(
-                  UpdateProgress(
-                    totalBytes: totalLengthKB,
-                    receivedBytes: receivedBytes,
-                    currentFile: file.filePath,
-                    totalFiles: totalFiles,
-                    completedFiles: completedFiles,
-                  ),
-                );
-              },
-            ).then((_) {
-              completedFiles += 1;
-
-              responseStream.add(
-                UpdateProgress(
-                  totalBytes: totalLengthKB,
-                  receivedBytes: receivedBytes,
-                  currentFile: file.filePath,
-                  totalFiles: totalFiles,
-                  completedFiles: completedFiles,
-                ),
-              );
-              print("Completed: ${file.filePath}");
-            }).catchError((error) {
-              responseStream.addError(error);
-              return null;
-            }),
-          );
-        }
-      }
-
-      unawaited(
-        Future.wait(changesFutureList).then((_) async {
-          await responseStream.close();
-        }),
-      );
-
-      return responseStream.stream;
+    if (response.statusCode != 200) {
+      throw HttpException("Failed to download update zip.");
     }
+
+    final totalBytes = response.contentLength.toDouble();
+    double receivedBytes = 0;
+
+    final sink = zipFile.openWrite();
+
+    await for (var chunk in response) {
+      receivedBytes += chunk.length;
+      sink.add(chunk);
+      responseStream.add(
+        UpdateProgress(
+          totalBytes: totalBytes / 1024.0, // KB
+          receivedBytes: receivedBytes / 1024.0,
+          currentFile: "update.zip",
+          totalFiles: 1,
+          completedFiles: 0,
+        ),
+      );
+    }
+
+    await sink.close();
+
+    responseStream.add(UpdateProgress(
+      totalBytes: totalBytes / 1024.0,
+      receivedBytes: receivedBytes / 1024.0,
+      currentFile: "update.zip",
+      totalFiles: 1,
+      completedFiles: 1,
+    ));
+
+    // Extract and overwrite existing files
+    final bytes = await zipFile.readAsBytes();
+    final archive = ZipDecoder().decodeBytes(bytes);
+
+    for (final file in archive) {
+      final outPath = "${appDirectory.path}${Platform.pathSeparator}${file.name}";
+
+      if (file.isFile) {
+        final output = File(outPath)..createSync(recursive: true);
+        output.writeAsBytesSync(file.content as List<int>);
+      } else {
+        Directory(outPath).createSync(recursive: true);
+      }
+    }
+
+    print("Update files extracted to: ${appDirectory.path}");
+
+    // FIX: Don't await close
+    responseStream.close();
+
+    print("Update files extracted successfully.");
   } catch (e) {
     responseStream.addError(e);
-    await responseStream.close();
+    print("Error during update: $e");
+    responseStream.close();
   }
+
+  print("Update completed successfully.");
 
   return responseStream.stream;
 }

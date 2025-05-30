@@ -46,12 +46,10 @@ class DesktopUpdater {
   }
 
   Future<Stream<UpdateProgress>> updateApp({
-    required String remoteUpdateFolder,
-    required List<FileHashModel?> changedFiles,
+    required String remoteZipUrl,
   }) {
     return updateAppFunction(
-      remoteUpdateFolder: remoteUpdateFolder,
-      changes: changedFiles,
+      remoteZipUrl: remoteZipUrl
     );
   }
 
